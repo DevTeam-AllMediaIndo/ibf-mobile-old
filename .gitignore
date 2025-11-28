@@ -1,3 +1,4 @@
 *.zip
 vendor/
 phpmailer/
+test/
