@@ -1,0 +1,75 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover" />
+        <title>IBF Trader</title>
+        <meta name="theme-color" content="#000000"/>
+        <link rel="stylesheet" type="text/css" href="styles/bootstrap.css">
+        <link rel="stylesheet" type="text/css" href="styles/style.css">
+        <link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700,800,900|Roboto:300,300i,400,400i,500,500i,700,700i,900,900i&amp;display=swap" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="fonts/css/fontawesome-all.min.css">    
+        <link rel="manifest" href="_manifest.json" data-pwa-version="set_in_manifest_and_pwa_js">
+        <link rel="apple-touch-icon" sizes="180x180" href="app/icons/icon-192x192.png">
+    </head>
+    
+    <body class="theme-light">
+        
+        <div id="page">
+            <div class="page-content pb-0">
+                <div class="card preload-img" data-src="images/pictures/9.jpg" data-card-height="cover">
+                    <div class="card-center text-center">
+                        <h1 class="fa-4x color-theme font-900">IBF Trader.</h1>
+                        <h6 class="font-300 color-highlight">PT. International Business Futures.</h6>
+                        
+                        <p class="boxed-text-xl pt-4 font-14">
+                            Trading Dengan Broker Resmi & Terpercaya,<br>
+                            Regulasi resmi BAPPEBTI, JFX, dan KBI.
+                        </p>
+                    </div>
+                    <div class="card-bottom mb-5">
+                        <div class="row">
+                            <div class="col-6">
+                                <a href="signin.php" class="back-button btn btn-center-m btn-m bg-highlight rounded-sm font-900 text-uppercase scale-box">Get Started</a>
+                            </div>
+                            <div class="col-6">
+                                <a href="insta-trans.php?tab=d" class="back-button btn btn-center-m btn-m bg-highlight rounded-sm font-900 text-uppercase scale-box">Top Up</a>
+                            </div>
+                            <!-- <div class="col-12">
+                                <a href="#" data-menu="menu-success-1" class="back-button btn btn-center-m btn-m bg-highlight rounded-sm font-900 text-uppercase scale-box">Test</a>
+                            </div> -->
+                        </div>
+                    </div>
+                    
+                    <div class="card-overlay bg-theme opacity-95"></div>
+                </div>
+            </div>
+        </div>
+        <script type="text/javascript" src="scripts/bootstrap.min.js"></script>
+        <script type="text/javascript" src="scripts/custom.js"></script>
+        <script>
+            function getCookie(cname) {
+                let name = cname + "=";
+                let ca = document.cookie.split(';');
+                for(let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) == ' ') {
+                        c = c.substring(1);
+                    }
+                    if (c.indexOf(name) == 0) {
+                        return c.substring(name.length, c.length);
+                    }
+                }
+                return "";
+            }
+            if(getCookie('id') != ''){
+                console.log(getCookie('id'));
+                if(getCookie('x') != ''){
+                    location.href = 'signin.php';
+                } else { console.log('x tidak ada'); };
+            } else { console.log('id tidak ada'); };
+
+        </script>
+    </body>
