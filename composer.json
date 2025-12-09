@@ -1,7 +1,14 @@
 {
+    "repositories": [
+        {
+            "type": "vcs", 
+            "url": "https://github.com/DevTeam-AllMediaIndo/shared-module.git"
+        }
+    ],
     "require": {
+        "php": "^7.4",        
         "google/apiclient": "^2.13",
         "dompdf/dompdf": "^2.0",
-        "aws/aws-sdk-php": "^3.257"
+        "allmedia/shared-module": "dev-testing_file_upload"
     }
 }
