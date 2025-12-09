@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9b1c0a4dc2d8938cbe6d6e485db201e7",
+    "content-hash": "9996e905e07e3a164948ff5cdfe9e7c8",
     "packages": [
         {
             "name": "allmedia/shared-module",
@@ -1892,7 +1892,7 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": "^7.4"
+        "php": "^7.2.24"
     },
     "platform-dev": {},
     "plugin-api-version": "2.6.0"
