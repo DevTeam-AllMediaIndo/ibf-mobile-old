@@ -4,373 +4,411 @@
 <?php
 
 require 'vendor/autoload.php';
-require_once __DIR__ . "/../FileUpload.php";
+use Aws\S3\S3Client;
+// AWS Info
+$region = 'ap-southeast-1';
+// $bucketName = 'allmediaindo-2';
+// $folder = 'ibftrader';
+// $IAM_KEY = 'AKIASPLPQWHJMMXY2KPR';
+// $IAM_SECRET = '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';
 
+$s3 = new Aws\S3\S3Client([
+    'region'  => $region,
+    'version' => 'latest',
+    'credentials' => [
+        'key'    => $IAM_KEY,
+        'secret' => $IAM_SECRET,
+    ]
+]);	
+$allowed = array("jpg" => "image/jpg", "jpeg" => "image/jpeg", "png" => "image/png");
 
-if(isset($_POST['dp_submit'])){
-    if(isset($_POST['bank_option'])){
-        if(isset($_POST['login']) && isset($_POST['amount']) && isset($_POST['bank'])){
-            $login = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['login']))));
-            $amount = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['amount']))));
-            $bank = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank']))));
-            $bank_option = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank_option']))));
-            $amount = str_replace(' ', '', $amount);
-            $amount = str_replace('Rp.', '', $amount);
-            $amount = str_replace('.', '', $amount);
-            $SQL_FND = mysqli_query($db,'
-                SELECT
-                    tb_racc.ACC_RATE
-                FROM tb_racc
-                WHERE ACC_LOGIN = "'.$login.'" 
-                AND ACC_MBR = '.$user1['MBR_ID'].' 
-                LIMIT 1
-            ');
-            if(mysqli_num_rows($SQL_FND) > 0){
-                $RSLT_FND = mysqli_fetch_assoc($SQL_FND);
-                if($RSLT_FND['ACC_RATE'] == 0){ $rate = 10000;} else {$rate = $RSLT_FND['ACC_RATE'];}
-            }
-            if($RSLT_FND['ACC_RATE'] == '0'){
-                $curr_idr = 0;
-                $curr = number_format($amount, 2);
-                $curr_lg = 'USD';
-                $curr_ag = '$';
-            }else{
-                $curr_idr = number_format($amount, 0);
-                $curr = number_format($amount, 0);
-                $curr_lg = 'IDR';
-                $curr_ag = 'Rp.';
-            }
-            if($bank_option == 'Bank 1'){
-                $DPWD_BANKSRC = 1;
-            } else {
-                $DPWD_BANKSRC = 2;
-            }
-            $SQL_CHECK = mysqli_query($db,'
-                SELECT 
-                    COUNT(tb_dpwd.DPWD_STS) AS TOTAL,
-                    (
-                        SELECT 
-                            tb_racc.ACC_F_APP_PRIBADI_NAMA
-                        FROM tb_racc 
-                        WHERE ACC_LOGIN = "'.$login.'" 
-                        AND ACC_MBR = '.$user1["MBR_ID"].' 
-                        LIMIT 1
-                    ) AS NME
-                FROM tb_dpwd
-                WHERE tb_dpwd.DPWD_MBR = '.$user1["MBR_ID"].'
-                AND tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1)
-                #AND tb_dpwd.DPWD_NOTE <> "Deposit New Account"
-                AND tb_dpwd.DPWD_TYPE = 1
-                AND tb_dpwd.DPWD_STS = 0
-            ');
-            $RESULT_ASC = mysqli_fetch_assoc($SQL_CHECK);
-            if($RESULT_ASC["TOTAL"] > 0){
-                logerr("Masih Ada Pending Deposit", "Deposit", $user1["MBR_ID"]);
-                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Request Deposit Anda Sebelumnya Masih Belum Di Setujui.')."'</script>");
-            } else {
-                if($amount > 100){
-                    if(isset($_FILES["dps_proof"]) && $_FILES["dps_proof"]["error"] == 0){
-    
-                        try {
-                            /** Upload Image */
-                            $uploadImage = FileUpload::aws()->upload_single($_FILES['dps_proof'], "deposit");
-                            if(!is_array($uploadImage) || !array_key_exists("filename", $uploadImage)) {
-                                $errorMessage = $uploadImage ?? "Gagal Upload Image";
-                                logerr($errorMessage, "Deposit", $user1["MBR_ID"]);
-                                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode($errorMessage)."'</script>"); 
-                            }
-    
-                            mysqli_query($db, '
-                                INSERT INTO tb_dpwd SET
-                                tb_dpwd.DPWD_MBR = '.$user1['MBR_ID'].',
-                                tb_dpwd.DPWD_TYPE = 1,
-                                tb_dpwd.DPWD_DEVICE = "Mobile",
-                                tb_dpwd.DPWD_BANKSRC = '.$DPWD_BANKSRC.',
-                                tb_dpwd.DPWD_BANK = '.$bank.',
-                                tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1),
-                                tb_dpwd.DPWD_AMOUNT = '.$amount.',
-                                tb_dpwd.DPWD_PIC = "'.$uploadImage['filename'].'",
-                                tb_dpwd.DPWD_DATETIME = "'.date('Y-m-d H:i:s').'"
-                            ') or die (mysqli_error($db));
-
-                            // // Message Telegram
-                            // $mesg = 'Notif : Deposit'.
-                            // PHP_EOL.'Date : '.date("Y-m-d").
-                            // PHP_EOL.'Time : '.date("H:i:s");
-                            // // PHP_EOL.'======== Informasi Deposit =========='.
-                            // // PHP_EOL.'Nama : '.$user1['MBR_NAME'].
-                            // // PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
-                            // // PHP_EOL.'Login : '.$login.
-                            // // PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
-                            // // PHP_EOL.'Status : Pending';
-
-                            // // Message Telegram
-                            // $mesg_othr = 'Notif : Deposit'.
-                            // PHP_EOL.'Date : '.date("Y-m-d").
-                            // PHP_EOL.'Time : '.date("H:i:s").
-                            // PHP_EOL.'============================='.
-                            // PHP_EOL.'               Informasi Deposit'.
-                            // PHP_EOL.'============================='.
-                            // PHP_EOL.'Nama : '.$RESULT_ASC["NME"].
-                            // PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
-                            // PHP_EOL.'Login : '.$login.
-                            // PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
-                            // PHP_EOL.'Status : Pending';
-
-                            // $request_params_wpb = [
-                            //     'chat_id' => $chat_id,
-                            //     'text' => $mesg_othr
-                            // ];
-                            // http_request('https://api.telegram.org/bot'.$token1.'/sendMessage?'.http_build_query($request_params_wpb));
-
-                            // $request_params_all = [
-                            //     'chat_id' => $chat_id_all,
-                            //     'text' => $mesg
-                            // ];
-                            // http_request('https://api.telegram.org/bot'.$token_all.'/sendMessage?'.http_build_query($request_params_all));
-
-                            // $request_params_othr = [
-                            //     'chat_id' => $chat_id_othr,
-                            //     'text' => $mesg_othr
-                            // ];
-                            // http_request('https://api.telegram.org/bot'.$token_othr.'/sendMessage?'.http_build_query($request_params_othr));
-                            insert_log($user1['MBR_ID'], 'Top Up Account '.$login);
-                            die ("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Success Upload Bukti Deposit.')."'</script>");
-
-                        } catch (mysqli_sql_exception | Exception $sql) {
-                            logerr("Internal Server Error (500)", "Deposit", $user1["MBR_ID"]);
-                            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode("Internal Server Error (500)")."'</script>");
-                        }
-                        
-                    } else { 
-                        logerr("File Tidak Bisa Dibaca", "Deposit", $user1["MBR_ID"]);
-                        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('sertakan bukti upload')."'</script>"); 
-                    };
-                } else { 
-                    logerr("Jumlah Inputan Kurang Dari Nilai Minimal", "Deposit", $user1["MBR_ID"]);
-                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('minimal top up 10.000')."'</script>"); 
-                };
-            };
-
-            
-        } else { 
-            logerr("Parameter Ke-2 Tidak Lengkap", "Deposit", $user1["MBR_ID"]);
-            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Errno1')."'</script>"); 
-        };
-    } else { 
-        logerr("Parameter Ke-1 Tidak Lengkap", "Deposit", $user1["MBR_ID"]);
-        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Errno2')."'</script>"); 
-    };
-};
-if($_SERVER["REQUEST_METHOD"] === "POST"){
-    // if(isset($_POST['wd_submit'])){
-        if(isset($_POST['login'])){
-            if(isset($_POST['amountwd'])){
-                if(isset($_POST['bank_option'])){
-                    $login = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['login']))));
-                    $bank_option = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank_option']))));
-                    $amountwd = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['amountwd']))));
-                    $note = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['note']))));
-                    $amountwd = str_replace(' ', '', $amountwd);
-                    $amountwd = str_replace('Rp.', '', $amountwd);
-                    $amountwd = str_replace('.', '', $amountwd);
-                    $SQL_FND = mysqli_query($db,'
-                        SELECT
-                            tb_racc.ACC_RATE
-                        FROM tb_racc
-                        WHERE ACC_LOGIN = "'.$login.'" 
-                        AND ACC_MBR = '.$user1['MBR_ID'].' 
-                        LIMIT 1
-                    ');
-                    if(mysqli_num_rows($SQL_FND) > 0){
-                        $RSLT_FND = mysqli_fetch_assoc($SQL_FND);
-                        if($RSLT_FND['ACC_RATE'] == 0){ $rate = 10000;} else {$rate = $RSLT_FND['ACC_RATE'];}
-                    }
-                    if($RSLT_FND['ACC_RATE'] == '0'){
-                        $curr_idr = 0;
-                        $curr = number_format($amountwd, 2);
-                        $curr_lg = 'USD';
-                        $curr_ag = '$';
-                    }else{
-                        $curr_idr = number_format($amountwd, 0);
-                        $curr = number_format($amountwd, 0);
-                        $curr_lg = 'IDR';
-                        $curr_ag = 'Rp.';
-                    }
-
-                    $SQL_CHECK = mysqli_query($db,'
-                        SELECT COUNT(tb_dpwd.DPWD_STS) AS TOTAL
-                        FROM tb_dpwd
-                        WHERE tb_dpwd.DPWD_MBR = '.$user1["MBR_ID"].'
-                        AND tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1)
-                        AND tb_dpwd.DPWD_TYPE = 2
-                        AND tb_dpwd.DPWD_STS = 0
-                    ');
-                    $RESULT_ASC = mysqli_fetch_assoc($SQL_CHECK);
-                    if($RESULT_ASC["TOTAL"] > 0){
-                        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Request Withdrawal Anda Sebelumnya Masih Belum Di Setujui.')."'</script>");
-                    } else {
-                        if($amountwd > 10000){
-
-                            $SQL_QUERY = mysqli_query($db, '
-                                SELECT 
-                                    tb_racc.ID_ACC,
-                                    tb_racc.ACC_F_APP_BK_1_ACC,
-                                    tb_racc.ACC_F_APP_BK_2_ACC,
-                                    tb_racc.ACC_F_APP_PRIBADI_NAMA,
-                                    tb_ib.IB_NAME,
-                                    tb_ib.IB_CITY
-                                FROM tb_racc 
-                                JOIN tb_acccond
-                                JOIN tb_ib
-                                ON(tb_racc.ACC_LOGIN = tb_acccond.ACCCND_LOGIN
-                                AND tb_acccond.ACCCND_IB = tb_ib.IB_ID)
-                                WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' 
-                                LIMIT 1    
-                            ');
-                            if(mysqli_num_rows($SQL_QUERY) > 0) {
-                                $SQL_RSLT = mysqli_fetch_assoc($SQL_QUERY);
-                                if($bank_option == 'Bank 1'){
-                                    $DPWD_BANKSRC = 1;
-                                    $BK_ACC = $SQL_RSLT["ACC_F_APP_BK_1_ACC"];
-                                } else {
-                                    $DPWD_BANKSRC = 2;
-                                    $BK_ACC = $SQL_RSLT["ACC_F_APP_BK_2_ACC"];
-                                }
-                                mysqli_query($db, '
-                                    INSERT INTO tb_dpwd SET
-                                    tb_dpwd.DPWD_MBR = '.$user1['MBR_ID'].',
-                                    tb_dpwd.DPWD_STSACC = -1,
-                                    tb_dpwd.DPWD_TYPE = 2,
-                                    tb_dpwd.DPWD_BANKSRC = '.$DPWD_BANKSRC.',
-                                    tb_dpwd.DPWD_DEVICE = "Mobile",
-                                    tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1),
-                                    tb_dpwd.DPWD_AMOUNT = '.$amountwd.',
-                                    tb_dpwd.DPWD_NOTE = "'.$note.'",
-                                    tb_dpwd.DPWD_DATETIME = "'.date('Y-m-d H:i:s').'"
-                                ') or die(mysqli_error($db));
-
-                                // Message Telegram
-                                $mesg = 'Notif : Withdarawal'.
-                                PHP_EOL.'Date : '.date("Y-m-d").
-                                PHP_EOL.'Time : '.date("H:i:s");
-                                // PHP_EOL.'======== Informasi Withdarawal =========='.
-                                // PHP_EOL.'Nama : '.$user1['MBR_NAME'].
-                                // PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
-                                // PHP_EOL.'Login : '.$login.
-                                // PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
-                                // PHP_EOL.'Status : Pending';
-
-                                // Message Telegram
-                                $mesg_othr = 'Notif : Withdarawal'.
-                                PHP_EOL.'Date : '.date("Y-m-d").
-                                PHP_EOL.'Time : '.date("H:i:s").
-                                PHP_EOL.'=================================='.
-                                PHP_EOL.'                 Informasi Withdarawal'.
-                                PHP_EOL.'=================================='.
-                                PHP_EOL.'Nama : '.$SQL_RSLT["ACC_F_APP_PRIBADI_NAMA"].
-                                PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
-                                PHP_EOL.'IB : '.$SQL_RSLT["IB_NAME"]. ' ('.$SQL_RSLT["IB_CITY"].')'.
-                                PHP_EOL.'Login : '.$login.
-                                PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
-                                PHP_EOL.'Bank Account : '.$BK_ACC.
-                                PHP_EOL.'Status : Pending';
-
-                                $request_params_stlmnt = [
-                                    'chat_id' => $chat_id_stllmnt,
-                                    'text' => $mesg
-                                ];
-                                http_request('https://api.telegram.org/bot'.$token_stllmnt.'/sendMessage?'.http_build_query($request_params_stlmnt));
-
-                                $request_params_all = [
-                                    'chat_id' => $chat_id_all,
-                                    'text' => $mesg
-                                ];
-                                http_request('https://api.telegram.org/bot'.$token_all.'/sendMessage?'.http_build_query($request_params_all));
-                                            
-                                $request_params_othr = [
-                                    'chat_id' => $chat_id_othr,
-                                    'text' => $mesg_othr
-                                ];
-                                http_request('https://api.telegram.org/bot'.$token_othr.'/sendMessage?'.http_build_query($request_params_othr));
-                                insert_log($user1['MBR_ID'], 'Withdrawal Account '.$login);
-                                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Success Withdrawal.')."'</script>");
+    if(isset($_POST['dp_submit'])){
+        if(isset($_POST['bank_option'])){
+            if(isset($_POST['login']) && isset($_POST['amount']) && isset($_POST['bank'])){
+                $login = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['login']))));
+                $amount = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['amount']))));
+                $bank = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank']))));
+                $bank_option = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank_option']))));
+                $amount = str_replace(' ', '', $amount);
+                $amount = str_replace('Rp.', '', $amount);
+                $amount = str_replace('.', '', $amount);
+                $SQL_FND = mysqli_query($db,'
+                    SELECT
+                        tb_racc.ACC_RATE
+                    FROM tb_racc
+                    WHERE ACC_LOGIN = "'.$login.'" 
+                    AND ACC_MBR = '.$user1['MBR_ID'].' 
+                    LIMIT 1
+                ');
+                if(mysqli_num_rows($SQL_FND) > 0){
+                    $RSLT_FND = mysqli_fetch_assoc($SQL_FND);
+                    if($RSLT_FND['ACC_RATE'] == 0){ $rate = 10000;} else {$rate = $RSLT_FND['ACC_RATE'];}
+                }
+                if($RSLT_FND['ACC_RATE'] == '0'){
+                    $curr_idr = 0;
+                    $curr = number_format($amount, 2);
+                    $curr_lg = 'USD';
+                    $curr_ag = '$';
+                }else{
+                    $curr_idr = number_format($amount, 0);
+                    $curr = number_format($amount, 0);
+                    $curr_lg = 'IDR';
+                    $curr_ag = 'Rp.';
+                }
+                if($bank_option == 'Bank 1'){
+                    $DPWD_BANKSRC = 1;
+                } else {
+                    $DPWD_BANKSRC = 2;
+                }
+                $SQL_CHECK = mysqli_query($db,'
+                    SELECT 
+                        COUNT(tb_dpwd.DPWD_STS) AS TOTAL,
+                        (
+                            SELECT 
+                                tb_racc.ACC_F_APP_PRIBADI_NAMA
+                            FROM tb_racc 
+                            WHERE ACC_LOGIN = "'.$login.'" 
+                            AND ACC_MBR = '.$user1["MBR_ID"].' 
+                            LIMIT 1
+                        ) AS NME
+                    FROM tb_dpwd
+                    WHERE tb_dpwd.DPWD_MBR = '.$user1["MBR_ID"].'
+                    AND tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1)
+                    #AND tb_dpwd.DPWD_NOTE <> "Deposit New Account"
+                    AND tb_dpwd.DPWD_TYPE = 1
+                    AND tb_dpwd.DPWD_STS = 0
+                ');
+                $RESULT_ASC = mysqli_fetch_assoc($SQL_CHECK);
+                if($RESULT_ASC["TOTAL"] > 0){
+                    logerr("Masih Ada Pending Deposit", "Deposit", $user1["MBR_ID"]);
+                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Request Deposit Anda Sebelumnya Masih Belum Di Setujui.')."'</script>");
+                } else {
+                    if($amount > 100){
+                        if(isset($_FILES["dps_proof"]) && $_FILES["dps_proof"]["error"] == 0){
         
-                            } else {
-                                logerr("Akun Tidak Ditemukan", "Withdrawal", $user1["MBR_ID"]);
-                                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please select account.')."'</script>"); 
-                            }
-                        } else {
-                            logerr("Jumlah Inputan Kurang Dari Nilai Minimal", "Withdrawal", $user1["MBR_ID"]);
-                            die("<script>location.href = 'home.php?page=account&notif=".base64_encode('Jumlah Inputan Kurang Dari Nilai Minimal.')."'</script>"); 
-                        }
+                            $newfilename1 = round(microtime(true));
+        
+                            $s5_6_doc1_name = $_FILES["dps_proof"]["name"];
+                            $s5_6_doc1_type = $_FILES["dps_proof"]["type"];
+                            
+                            $s5_6_doc1_ext = pathinfo($s5_6_doc1_name, PATHINFO_EXTENSION);
+                            if(array_key_exists($s5_6_doc1_ext, $allowed)){
+                                if(in_array($s5_6_doc1_type, $allowed)){
+                                    $s5_6_doc1_new = 'dps_'.$user1['MBR_ID'].'_'.round(microtime(true)).'.'.$s5_6_doc1_ext;
+                                    if(move_uploaded_file($_FILES["dps_proof"]["tmp_name"], "upload/" . $s5_6_doc1_new)){
+                                        $s5_6_doc1_Path = 'upload/'. $s5_6_doc1_new;
+                                        $s5_6_doc1_key = basename($s5_6_doc1_Path);
+                                        
+                                        try {
+                                            $result = $s3->putObject([
+                                                'Bucket' => $bucketName,
+                                                'Key'    => $folder.'/'.$s5_6_doc1_key,
+                                                'Body'   => fopen($s5_6_doc1_Path, 'r'),
+                                                'ACL'    => 'public-read', // make file 'public'
+                                            ]);
+                                            mysqli_query($db, '
+                                                INSERT INTO tb_dpwd SET
+                                                tb_dpwd.DPWD_MBR = '.$user1['MBR_ID'].',
+                                                tb_dpwd.DPWD_TYPE = 1,
+                                                tb_dpwd.DPWD_DEVICE = "Mobile",
+                                                tb_dpwd.DPWD_BANKSRC = '.$DPWD_BANKSRC.',
+                                                tb_dpwd.DPWD_BANK = '.$bank.',
+                                                tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1),
+                                                tb_dpwd.DPWD_AMOUNT = '.$amount.',
+                                                tb_dpwd.DPWD_PIC = "'.$s5_6_doc1_new.'",
+                                                tb_dpwd.DPWD_DATETIME = "'.date('Y-m-d H:i:s').'"
+                                            ') or die (mysqli_error($db));
+
+                                            // Message Telegram
+                                            $mesg = 'Notif : Deposit'.
+                                            PHP_EOL.'Date : '.date("Y-m-d").
+                                            PHP_EOL.'Time : '.date("H:i:s");
+                                            // PHP_EOL.'======== Informasi Deposit =========='.
+                                            // PHP_EOL.'Nama : '.$user1['MBR_NAME'].
+                                            // PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
+                                            // PHP_EOL.'Login : '.$login.
+                                            // PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
+                                            // PHP_EOL.'Status : Pending';
+
+                                            // Message Telegram
+                                            $mesg_othr = 'Notif : Deposit'.
+                                            PHP_EOL.'Date : '.date("Y-m-d").
+                                            PHP_EOL.'Time : '.date("H:i:s").
+                                            PHP_EOL.'============================='.
+                                            PHP_EOL.'               Informasi Deposit'.
+                                            PHP_EOL.'============================='.
+                                            PHP_EOL.'Nama : '.$RESULT_ASC["NME"].
+                                            PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
+                                            PHP_EOL.'Login : '.$login.
+                                            PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
+                                            PHP_EOL.'Status : Pending';
+
+                                            $request_params_wpb = [
+                                                'chat_id' => $chat_id,
+                                                'text' => $mesg_othr
+                                            ];
+                                            http_request('https://api.telegram.org/bot'.$token1.'/sendMessage?'.http_build_query($request_params_wpb));
+
+                                            $request_params_all = [
+                                                'chat_id' => $chat_id_all,
+                                                'text' => $mesg
+                                            ];
+                                            http_request('https://api.telegram.org/bot'.$token_all.'/sendMessage?'.http_build_query($request_params_all));
+
+                                            $request_params_othr = [
+                                                'chat_id' => $chat_id_othr,
+                                                'text' => $mesg_othr
+                                            ];
+                                            http_request('https://api.telegram.org/bot'.$token_othr.'/sendMessage?'.http_build_query($request_params_othr));
+                            
+        
+                                            insert_log($user1['MBR_ID'], 'Top Up Account '.$login);
+                                            unlink($s5_6_doc1_Path);
+                                            die ("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Success Upload Bukti Deposit.')."'</script>");
+                                        } catch (Aws\S3\Exception\S3Exception $e) {
+                                            die ("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('There was an error uploading the file.')."'</script>");
+                                        };
+                                    } else { 
+                                        logerr("Folder Tidak Di Temukan", "Deposit", $user1["MBR_ID"]);
+                                        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('file tidak terupload, silahkan ulangi lagi')."'</script>"); 
+                                    };
+                                } else { 
+                                    logerr("Type File Tidak Sesuai", "Deposit", $user1["MBR_ID"]);
+                                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('file hanya jpg, png, jpeg')."'</script>"); 
+                                };
+                            } else { 
+                                logerr("Extensi File Tidak Sesuai", "Deposit", $user1["MBR_ID"]);
+                                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('file hanya jpg, png, jpeg')."'</script>"); 
+                            };
+                        } else { 
+                            logerr("File Tidak Bisa Dibaca", "Deposit", $user1["MBR_ID"]);
+                            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('sertakan bukti upload')."'</script>"); 
+                        };
+                    } else { 
+                        logerr("Jumlah Inputan Kurang Dari Nilai Minimal", "Deposit", $user1["MBR_ID"]);
+                        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('minimal top up 10.000')."'</script>"); 
                     };
-                }else {
-                    logerr("Parameter Ke-3 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
-                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again3.')."'</script>"); 
+                };
+
+                
+            } else { 
+                logerr("Parameter Ke-2 Tidak Lengkap", "Deposit", $user1["MBR_ID"]);
+                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Errno1')."'</script>"); 
+            };
+        } else { 
+            logerr("Parameter Ke-1 Tidak Lengkap", "Deposit", $user1["MBR_ID"]);
+            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Errno2')."'</script>"); 
+        };
+    };
+    if($_SERVER["REQUEST_METHOD"] === "POST"){
+        // if(isset($_POST['wd_submit'])){
+            if(isset($_POST['login'])){
+                if(isset($_POST['amountwd'])){
+                    if(isset($_POST['bank_option'])){
+                        $login = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['login']))));
+                        $bank_option = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['bank_option']))));
+                        $amountwd = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['amountwd']))));
+                        $note = addslashes(mysqli_real_escape_string($db, stripslashes(strip_tags($_POST['note']))));
+                        $amountwd = str_replace(' ', '', $amountwd);
+                        $amountwd = str_replace('Rp.', '', $amountwd);
+                        $amountwd = str_replace('.', '', $amountwd);
+                        $SQL_FND = mysqli_query($db,'
+                            SELECT
+                                tb_racc.ACC_RATE
+                            FROM tb_racc
+                            WHERE ACC_LOGIN = "'.$login.'" 
+                            AND ACC_MBR = '.$user1['MBR_ID'].' 
+                            LIMIT 1
+                        ');
+                        if(mysqli_num_rows($SQL_FND) > 0){
+                            $RSLT_FND = mysqli_fetch_assoc($SQL_FND);
+                            if($RSLT_FND['ACC_RATE'] == 0){ $rate = 10000;} else {$rate = $RSLT_FND['ACC_RATE'];}
+                        }
+                        if($RSLT_FND['ACC_RATE'] == '0'){
+                            $curr_idr = 0;
+                            $curr = number_format($amountwd, 2);
+                            $curr_lg = 'USD';
+                            $curr_ag = '$';
+                        }else{
+                            $curr_idr = number_format($amountwd, 0);
+                            $curr = number_format($amountwd, 0);
+                            $curr_lg = 'IDR';
+                            $curr_ag = 'Rp.';
+                        }
+
+                        $SQL_CHECK = mysqli_query($db,'
+                            SELECT COUNT(tb_dpwd.DPWD_STS) AS TOTAL
+                            FROM tb_dpwd
+                            WHERE tb_dpwd.DPWD_MBR = '.$user1["MBR_ID"].'
+                            AND tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1)
+                            AND tb_dpwd.DPWD_TYPE = 2
+                            AND tb_dpwd.DPWD_STS = 0
+                        ');
+                        $RESULT_ASC = mysqli_fetch_assoc($SQL_CHECK);
+                        if($RESULT_ASC["TOTAL"] > 0){
+                            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Request Withdrawal Anda Sebelumnya Masih Belum Di Setujui.')."'</script>");
+                        } else {
+                            if($amountwd > 10000){
+
+                                $SQL_QUERY = mysqli_query($db, '
+                                    SELECT 
+                                        tb_racc.ID_ACC,
+                                        tb_racc.ACC_F_APP_BK_1_ACC,
+                                        tb_racc.ACC_F_APP_BK_2_ACC,
+                                        tb_racc.ACC_F_APP_PRIBADI_NAMA,
+                                        tb_ib.IB_NAME,
+                                        tb_ib.IB_CITY
+                                    FROM tb_racc 
+                                    JOIN tb_acccond
+                                    JOIN tb_ib
+                                    ON(tb_racc.ACC_LOGIN = tb_acccond.ACCCND_LOGIN
+                                    AND tb_acccond.ACCCND_IB = tb_ib.IB_ID)
+                                    WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' 
+                                    LIMIT 1    
+                                ');
+                                if(mysqli_num_rows($SQL_QUERY) > 0) {
+                                    $SQL_RSLT = mysqli_fetch_assoc($SQL_QUERY);
+                                    if($bank_option == 'Bank 1'){
+                                        $DPWD_BANKSRC = 1;
+                                        $BK_ACC = $SQL_RSLT["ACC_F_APP_BK_1_ACC"];
+                                    } else {
+                                        $DPWD_BANKSRC = 2;
+                                        $BK_ACC = $SQL_RSLT["ACC_F_APP_BK_2_ACC"];
+                                    }
+                                    mysqli_query($db, '
+                                        INSERT INTO tb_dpwd SET
+                                        tb_dpwd.DPWD_MBR = '.$user1['MBR_ID'].',
+                                        tb_dpwd.DPWD_STSACC = -1,
+                                        tb_dpwd.DPWD_TYPE = 2,
+                                        tb_dpwd.DPWD_BANKSRC = '.$DPWD_BANKSRC.',
+                                        tb_dpwd.DPWD_DEVICE = "Mobile",
+                                        tb_dpwd.DPWD_LOGIN = (SELECT ID_ACC FROM tb_racc WHERE ACC_LOGIN = "'.$login.'" AND ACC_MBR = '.$user1['MBR_ID'].' LIMIT 1),
+                                        tb_dpwd.DPWD_AMOUNT = '.$amountwd.',
+                                        tb_dpwd.DPWD_NOTE = "'.$note.'",
+                                        tb_dpwd.DPWD_DATETIME = "'.date('Y-m-d H:i:s').'"
+                                    ') or die(mysqli_error($db));
+
+                                    // Message Telegram
+                                    $mesg = 'Notif : Withdarawal'.
+                                    PHP_EOL.'Date : '.date("Y-m-d").
+                                    PHP_EOL.'Time : '.date("H:i:s");
+                                    // PHP_EOL.'======== Informasi Withdarawal =========='.
+                                    // PHP_EOL.'Nama : '.$user1['MBR_NAME'].
+                                    // PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
+                                    // PHP_EOL.'Login : '.$login.
+                                    // PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
+                                    // PHP_EOL.'Status : Pending';
+
+                                    // Message Telegram
+                                    $mesg_othr = 'Notif : Withdarawal'.
+                                    PHP_EOL.'Date : '.date("Y-m-d").
+                                    PHP_EOL.'Time : '.date("H:i:s").
+                                    PHP_EOL.'=================================='.
+                                    PHP_EOL.'                 Informasi Withdarawal'.
+                                    PHP_EOL.'=================================='.
+                                    PHP_EOL.'Nama : '.$SQL_RSLT["ACC_F_APP_PRIBADI_NAMA"].
+                                    PHP_EOL.'Email : '.$user1['MBR_EMAIL'].
+                                    PHP_EOL.'IB : '.$SQL_RSLT["IB_NAME"]. ' ('.$SQL_RSLT["IB_CITY"].')'.
+                                    PHP_EOL.'Login : '.$login.
+                                    PHP_EOL.'Ammount : '.$curr_ag.' '.$curr.
+                                    PHP_EOL.'Bank Account : '.$BK_ACC.
+                                    PHP_EOL.'Status : Pending';
+
+                                    $request_params_stlmnt = [
+                                        'chat_id' => $chat_id_stllmnt,
+                                        'text' => $mesg
+                                    ];
+                                    http_request('https://api.telegram.org/bot'.$token_stllmnt.'/sendMessage?'.http_build_query($request_params_stlmnt));
+
+                                    $request_params_all = [
+                                        'chat_id' => $chat_id_all,
+                                        'text' => $mesg
+                                    ];
+                                    http_request('https://api.telegram.org/bot'.$token_all.'/sendMessage?'.http_build_query($request_params_all));
+                                                
+                                    $request_params_othr = [
+                                        'chat_id' => $chat_id_othr,
+                                        'text' => $mesg_othr
+                                    ];
+                                    http_request('https://api.telegram.org/bot'.$token_othr.'/sendMessage?'.http_build_query($request_params_othr));
+                                    insert_log($user1['MBR_ID'], 'Withdrawal Account '.$login);
+                                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Success Withdrawal.')."'</script>");
+            
+                                } else {
+                                    logerr("Akun Tidak Ditemukan", "Withdrawal", $user1["MBR_ID"]);
+                                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please select account.')."'</script>"); 
+                                }
+                            } else {
+                                logerr("Jumlah Inputan Kurang Dari Nilai Minimal", "Withdrawal", $user1["MBR_ID"]);
+                                die("<script>location.href = 'home.php?page=account&notif=".base64_encode('Jumlah Inputan Kurang Dari Nilai Minimal.')."'</script>"); 
+                            }
+                        };
+                    }else {
+                        logerr("Parameter Ke-3 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
+                        die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again3.')."'</script>"); 
+                    }
+                } else {
+                    logerr("Parameter Ke-2 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
+                    die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again2.')."'</script>"); 
                 }
             } else {
-                logerr("Parameter Ke-2 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
-                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again2.')."'</script>"); 
+                logerr("Parameter Ke-1 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
+                die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again.')."'</script>"); 
             }
-        } else {
-            logerr("Parameter Ke-1 Tidak Lengkap", "Withdrawal", $user1["MBR_ID"]);
-            die("<script>location.href = 'home.php?page=dashboard&notif=".base64_encode('Please try again.')."'</script>"); 
-        }
-    // };
-};
-$id_live = $_GET['login'];
+        // };
+    };
+    $id_live = $_GET['login'];
+    
+    $SQL_QUERY = mysqli_query($db,'
+        SELECT
+            tb_racc.ACC_F_APP_BK_1_NAMA,
+            tb_racc.ACC_F_APP_BK_1_CBNG,
+            tb_racc.ACC_F_APP_BK_1_ACC,
+            tb_racc.ACC_F_APP_BK_1_TLP,
+            tb_racc.ACC_F_APP_BK_1_JENIS,
+            tb_racc.ACC_F_APP_BK_2_NAMA,
+            tb_racc.ACC_F_APP_BK_2_CBNG,
+            IF(tb_racc.ACC_F_APP_BK_2_ACC = "", "-", tb_racc.ACC_F_APP_BK_2_ACC) AS ACC_F_APP_BK_2_ACC,
+            tb_racc.ACC_F_APP_BK_2_TLP,
+            tb_racc.ACC_F_APP_BK_2_JENIS
+        FROM tb_racc
+        WHERE ((tb_racc.ACC_LOGIN)) = "'.$id_live.'"
+        LIMIT 1
+    ') or die(mysqli_error($db));
+    if(mysqli_num_rows($SQL_QUERY) > 0){
+        $RESULT_QUERY = mysqli_fetch_assoc($SQL_QUERY);
+        $ACC_F_APP_BK_1_NAMA = $RESULT_QUERY['ACC_F_APP_BK_1_NAMA'];
+        $ACC_F_APP_BK_1_CBNG = $RESULT_QUERY['ACC_F_APP_BK_1_CBNG'];
+        $ACC_F_APP_BK_1_ACC = $RESULT_QUERY['ACC_F_APP_BK_1_ACC'];
+        $ACC_F_APP_BK_1_TLP = $RESULT_QUERY['ACC_F_APP_BK_1_TLP'];
+        $ACC_F_APP_BK_1_JENIS = $RESULT_QUERY['ACC_F_APP_BK_1_JENIS'];
+        $ACC_F_APP_BK_2_NAMA = $RESULT_QUERY['ACC_F_APP_BK_2_NAMA'];
+        $ACC_F_APP_BK_2_CBNG = $RESULT_QUERY['ACC_F_APP_BK_2_CBNG'];
+        $ACC_F_APP_BK_2_ACC = $RESULT_QUERY['ACC_F_APP_BK_2_ACC'];
+        $ACC_F_APP_BK_2_TLP = $RESULT_QUERY['ACC_F_APP_BK_2_TLP'];
+        $ACC_F_APP_BK_2_JENIS = $RESULT_QUERY['ACC_F_APP_BK_2_JENIS'];
+    }else{
+        $ACC_F_APP_BK_1_NAMA = '-';
+        $ACC_F_APP_BK_1_CBNG = '-';
+        $ACC_F_APP_BK_1_ACC = '-';
+        $ACC_F_APP_BK_1_TLP = '-';
+        $ACC_F_APP_BK_1_JENIS = '-';
+        $ACC_F_APP_BK_2_NAMA = '-';
+        $ACC_F_APP_BK_2_CBNG = '-';
+        $ACC_F_APP_BK_2_ACC = '-';
+        $ACC_F_APP_BK_2_TLP = '-';
+        $ACC_F_APP_BK_2_JENIS = '-';
+    };
 
-$SQL_QUERY = mysqli_query($db,'
-    SELECT
-        tb_racc.ACC_F_APP_BK_1_NAMA,
-        tb_racc.ACC_F_APP_BK_1_CBNG,
-        tb_racc.ACC_F_APP_BK_1_ACC,
-        tb_racc.ACC_F_APP_BK_1_TLP,
-        tb_racc.ACC_F_APP_BK_1_JENIS,
-        tb_racc.ACC_F_APP_BK_2_NAMA,
-        tb_racc.ACC_F_APP_BK_2_CBNG,
-        IF(tb_racc.ACC_F_APP_BK_2_ACC = "", "-", tb_racc.ACC_F_APP_BK_2_ACC) AS ACC_F_APP_BK_2_ACC,
-        tb_racc.ACC_F_APP_BK_2_TLP,
-        tb_racc.ACC_F_APP_BK_2_JENIS
-    FROM tb_racc
-    WHERE ((tb_racc.ACC_LOGIN)) = "'.$id_live.'"
-    LIMIT 1
-') or die(mysqli_error($db));
-if(mysqli_num_rows($SQL_QUERY) > 0){
-    $RESULT_QUERY = mysqli_fetch_assoc($SQL_QUERY);
-    $ACC_F_APP_BK_1_NAMA = $RESULT_QUERY['ACC_F_APP_BK_1_NAMA'];
-    $ACC_F_APP_BK_1_CBNG = $RESULT_QUERY['ACC_F_APP_BK_1_CBNG'];
-    $ACC_F_APP_BK_1_ACC = $RESULT_QUERY['ACC_F_APP_BK_1_ACC'];
-    $ACC_F_APP_BK_1_TLP = $RESULT_QUERY['ACC_F_APP_BK_1_TLP'];
-    $ACC_F_APP_BK_1_JENIS = $RESULT_QUERY['ACC_F_APP_BK_1_JENIS'];
-    $ACC_F_APP_BK_2_NAMA = $RESULT_QUERY['ACC_F_APP_BK_2_NAMA'];
-    $ACC_F_APP_BK_2_CBNG = $RESULT_QUERY['ACC_F_APP_BK_2_CBNG'];
-    $ACC_F_APP_BK_2_ACC = $RESULT_QUERY['ACC_F_APP_BK_2_ACC'];
-    $ACC_F_APP_BK_2_TLP = $RESULT_QUERY['ACC_F_APP_BK_2_TLP'];
-    $ACC_F_APP_BK_2_JENIS = $RESULT_QUERY['ACC_F_APP_BK_2_JENIS'];
-}else{
-    $ACC_F_APP_BK_1_NAMA = '-';
-    $ACC_F_APP_BK_1_CBNG = '-';
-    $ACC_F_APP_BK_1_ACC = '-';
-    $ACC_F_APP_BK_1_TLP = '-';
-    $ACC_F_APP_BK_1_JENIS = '-';
-    $ACC_F_APP_BK_2_NAMA = '-';
-    $ACC_F_APP_BK_2_CBNG = '-';
-    $ACC_F_APP_BK_2_ACC = '-';
-    $ACC_F_APP_BK_2_TLP = '-';
-    $ACC_F_APP_BK_2_JENIS = '-';
-};
-
-if(isset($_GET['x'])){
-    $x = form_input($_GET["x"]);
-}
-if(isset($_GET['action'])){
-    if(isset($_GET['login'])){
-        $action = form_input($_GET["action"]);
-        $login = form_input($_GET["login"]);
-        
-        if($action == 'deposit'){
+    if(isset($_GET['x'])){
+        $x = form_input($_GET["x"]);
+    }
+    if(isset($_GET['action'])){
+        if(isset($_GET['login'])){
+            $action = form_input($_GET["action"]);
+            $login = form_input($_GET["login"]);
+            
+            if($action == 'deposit'){
 ?>
 <form method="post" enctype="multipart/form-data" id="frm">
     <div class="page-title page-title-small">
@@ -552,7 +590,6 @@ if(isset($_GET['action'])){
         `;
     });
 </script>
-
 <?php } else if($action == 'withdrawal'){ ?>
     
 <form method="post" id="wd_submit">
