@@ -6,6 +6,9 @@ if(!class_exists("Allmedia\Shared\FileUpload\UploadAWS")) {
 
 class FileUpload {
 
+    /** 
+     * @return Allmedia\Shared\FileUpload\UploadAWS
+     */
     public static function aws() {
         $config = [
             'region' => "ap-southeast-1",
