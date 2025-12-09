@@ -1,5 +1,6 @@
 <?php
 date_default_timezone_set("Asia/Jakarta");
+putenv('AWS_SUPPRESS_PHP_DEPRECATION_WARNING=true');
 
 $host_name = "45.76.176.106:1224";
 $user_name = "root";
