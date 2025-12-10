@@ -1,7 +1,8 @@
 <?php
     require 'vendor/autoload.php';
+    require_once __DIR__ . "/../../FileUpload.php";
 
-    use Aws\S3\S3Client;
+    // use Aws\S3\S3Client;
 
     $id_live = $_GET['id'];
 
@@ -35,15 +36,6 @@
 	// $folder = 'ibftrader';
 	// $IAM_KEY = 'AKIASPLPQWHJMMXY2KPR';
 	// $IAM_SECRET = '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';
-    
-    $s3 = new Aws\S3\S3Client([
-        'region'  => $region,
-        'version' => 'latest',
-        'credentials' => [
-            'key'    => $IAM_KEY,
-            'secret' => $IAM_SECRET,
-        ]
-    ]);	
 
     $newfilename1 = round(microtime(true));
     
@@ -80,35 +72,21 @@
                             if($s5_6_doc1_size < 5000000) {
                                 if(array_key_exists($s5_6_doc1_ext, $allowed)){
                                     if(in_array($s5_6_doc1_type, $allowed)){
-                                        $s5_6_doc1_new = 'doc1_'.$user1['MBR_ID'].'_'.round(microtime(true)).'.'.$s5_6_doc1_ext;
-                                        if(move_uploaded_file($_FILES["s5_6_doc1"]["tmp_name"], "upload/" . $s5_6_doc1_new)){
-                                            
-                                            $s5_6_doc1_Path = 'upload/'. $s5_6_doc1_new;
-                                            $s5_6_doc1_key = basename($s5_6_doc1_Path);
-    
-                                            try {
-                                                $result = $s3->putObject([
-                                                    'Bucket' => $bucketName,
-                                                    'Key'    => $folder.'/'.$s5_6_doc1_key,
-                                                    'Body'   => fopen($s5_6_doc1_Path, 'r'),
-                                                    'ACL'    => 'public-read', // make file 'public'
-                                                ]);
-                                                mysqli_query($db, '
-                                                    UPDATE tb_racc SET
-                                                    tb_racc.ACC_F_APP_FILE_IMG = "'.$s5_6_doc1_new.'"
-                                                    WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
-                                                ') or die (mysqli_error($db));
-                                                unlink($s5_6_doc1_Path);
-                                                $s5_6_doc1_sts = -1;
-                                            } catch (Aws\S3\Exception\S3Exception $e) {
-                                                
-                                                logerr("Tidak Bisa Upload Ke AWS S3. Bagian Dokumen Pendukung 1", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                                die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
-                                            }
-                                        } else { 
-                                            logerr("Folder Tidak Ditemukan. Bagian Dokumen Pendukung 1", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('File is not uploaded.')."'</script>"); 
+                                        
+                                        /** Upload Image */
+                                        $uploadImage = FileUpload::aws()->upload_single($_FILES['s5_6_doc1'], "document");
+                                        if(!is_array($uploadImage) || !array_key_exists("filename", $uploadImage)) {
+                                            $errorMessage = $uploadImage ?? "Gagal Upload Image";
+                                            logerr($errorMessage, "Document", $user1["MBR_ID"]);
+                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
                                         }
+
+                                        mysqli_query($db, '
+                                            UPDATE tb_racc SET
+                                            tb_racc.ACC_F_APP_FILE_IMG = "'.$uploadImage['filename'].'"
+                                            WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
+                                        ') or die (mysqli_error($db));
+                                        $s5_6_doc1_sts = -1;
                                     } else { 
                                         logerr("Type File Tidak Sesuai. Bagian Dokumen Pendukung 1", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
                                         die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('Error: There was a problem uploading your file. Please try again.')."'</script>"); 
@@ -134,34 +112,20 @@
                             if($s5_6_doc2_size < 5000000) {
                                 if(array_key_exists($s5_6_doc2_ext, $allowed)){
                                     if(in_array($s5_6_doc2_type, $allowed)){
-                                        $s5_6_doc2_new = 'doc2_'.$user1['MBR_ID'].'_'.round(microtime(true)).'.'.$s5_6_doc2_ext;
-                                        if(move_uploaded_file($_FILES["s5_6_doc2"]["tmp_name"], "upload/" . $s5_6_doc2_new)){
-                                            
-                                            $s5_6_doc2_Path = 'upload/'. $s5_6_doc2_new;
-                                            $s5_6_doc2_key = basename($s5_6_doc2_Path);
-    
-                                            try {
-                                                $result = $s3->putObject([
-                                                    'Bucket' => $bucketName,
-                                                    'Key'    => $folder.'/'.$s5_6_doc2_key,
-                                                    'Body'   => fopen($s5_6_doc2_Path, 'r'),
-                                                    'ACL'    => 'public-read', // make file 'public'
-                                                ]);
-                                                mysqli_query($db, '
-                                                    UPDATE tb_racc SET
-                                                    tb_racc.ACC_F_APP_FILE_IMG2 = "'.$s5_6_doc2_new.'"
-                                                    WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
-                                                ') or die (mysqli_error($db));
-                                                unlink($s5_6_doc2_Path);
-                                                $s5_6_doc2_sts = -1;
-                                            } catch (Aws\S3\Exception\S3Exception $e) {
-                                                logerr("Tidak Bisa Upload Ke AWS S3. Bagian Dokumen Pendukung 2", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                                die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
-                                            }
-                                        } else {
-                                            logerr("Folder Tidak Ditemukan. Bagian Dokumen Pendukung 2", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('File is not uploaded.')."'</script>"); 
+                                        /** Upload Image */
+                                        $uploadImage = FileUpload::aws()->upload_single($_FILES['s5_6_doc2'], "document");
+                                        if(!is_array($uploadImage) || !array_key_exists("filename", $uploadImage)) {
+                                            $errorMessage = $uploadImage ?? "Gagal Upload Image";
+                                            logerr($errorMessage, "Document", $user1["MBR_ID"]);
+                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
                                         }
+                                        
+                                        mysqli_query($db, '
+                                            UPDATE tb_racc SET
+                                            tb_racc.ACC_F_APP_FILE_IMG2 = "'.$uploadImage['filename'].'"
+                                            WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
+                                        ') or die (mysqli_error($db));
+                                        $s5_6_doc2_sts = -1;
                                     } else {
                                         logerr("Type File Tidak Sesuai. Bagian Dokumen Pendukung 2", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
                                         die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('Error: There was a problem uploading your file. Please try again.')."'</script>"); 
@@ -188,34 +152,20 @@
                             if($s5_6_fotoself_size < 5000000) {
                                 if(array_key_exists($s5_6_fotoself_ext, $allowed)){
                                     if(in_array($s5_6_fotoself_type, $allowed)){
-                                        $s5_6_fotoself_new = 'self_'.$user1['MBR_ID'].'_'.round(microtime(true)).'.'.$s5_6_fotoself_ext;
-                                        if(move_uploaded_file($_FILES["s5_6_fotoself"]["tmp_name"], "upload/" . $s5_6_fotoself_new)){
-                                            
-                                            $s5_6_fotoself_Path = 'upload/'. $s5_6_fotoself_new;
-                                            $s5_6_fotoself_key = basename($s5_6_fotoself_Path);
-    
-                                            try {
-                                                $result = $s3->putObject([
-                                                    'Bucket' => $bucketName,
-                                                    'Key'    => $folder.'/'.$s5_6_fotoself_key,
-                                                    'Body'   => fopen($s5_6_fotoself_Path, 'r'),
-                                                    'ACL'    => 'public-read', // make file 'public'
-                                                ]);
-                                                mysqli_query($db, '
-                                                    UPDATE tb_racc SET
-                                                    tb_racc.ACC_F_APP_FILE_FOTO = "'.$s5_6_fotoself_new.'"
-                                                    WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
-                                                ') or die (mysqli_error($db));
-                                                unlink($s5_6_fotoself_Path);
-                                                $s5_6_fotoself_sts = -1;
-                                            } catch (Aws\S3\Exception\S3Exception $e) {
-                                                logerr("Tidak Bisa Upload Ke AWS S3. Bagian Photo Selfie", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                                die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
-                                            }
-                                        } else {
-                                            logerr("Folder Tidak Ditemukan. Bagian Photo Selfie", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('File is not uploaded.')."'</script>"); 
+                                        /** Upload Image */
+                                        $uploadImage = FileUpload::aws()->upload_single($_FILES['s5_6_fotoself'], "foto_selfie");
+                                        if(!is_array($uploadImage) || !array_key_exists("filename", $uploadImage)) {
+                                            $errorMessage = $uploadImage ?? "Gagal Upload Image";
+                                            logerr($errorMessage, "Foto selfie", $user1["MBR_ID"]);
+                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
                                         }
+                                        
+                                        mysqli_query($db, '
+                                            UPDATE tb_racc SET
+                                            tb_racc.ACC_F_APP_FILE_FOTO = "'.$uploadImage["filename"].'"
+                                            WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
+                                        ') or die (mysqli_error($db));
+                                        $s5_6_fotoself_sts = -1;
                                     } else {
                                         logerr("Type File Tidak Sesuai. Bagian Photo Selfie", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
                                         die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('Error: There was a problem uploading your file. Please try again.')."'</script>"); 
@@ -241,34 +191,19 @@
                             if($s5_6_fotoid_size < 5000000) {
                                 if(array_key_exists($s5_6_fotoid_ext, $allowed)){
                                     if(in_array($s5_6_fotoid_type, $allowed)){
-                                        $s5_6_fotoid_new = 'id_'.$user1['MBR_ID'].'_'.round(microtime(true)).'.'.$s5_6_fotoid_ext;
-                                        if(move_uploaded_file($_FILES["s5_6_fotoid"]["tmp_name"], "upload/" . $s5_6_fotoid_new)){
-                                            
-                                            $s5_6_fotoid_Path = 'upload/'. $s5_6_fotoid_new;
-                                            $s5_6_fotoid_key = basename($s5_6_fotoid_Path);
-    
-                                            try {
-                                                $result = $s3->putObject([
-                                                    'Bucket' => $bucketName,
-                                                    'Key'    => $folder.'/'.$s5_6_fotoid_key,
-                                                    'Body'   => fopen($s5_6_fotoid_Path, 'r'),
-                                                    'ACL'    => 'public-read', // make file 'public'
-                                                ]);
-                                                mysqli_query($db, '
-                                                    UPDATE tb_racc SET
-                                                    tb_racc.ACC_F_APP_FILE_ID = "'.$s5_6_fotoid_new.'"
-                                                    WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
-                                                ') or die (mysqli_error($db));
-                                                unlink($s5_6_fotoid_Path);
-                                                $s5_6_fotoid_sts = -1;
-                                            } catch (Aws\S3\Exception\S3Exception $e) {
-                                                logerr("Tidak Bisa Upload Ke AWS S3. Bagian Photo Data Diri", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                                die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
-                                            }
-                                        } else {
-                                            logerr("Folder Tidak Ditemukan. Bagian Photo Data Diri", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
-                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('File is not uploaded.')."'</script>"); 
+                                        /** Upload Image */
+                                        $uploadImage = FileUpload::aws()->upload_single($_FILES['s5_6_fotoid'], "ktp_passport");
+                                        if(!is_array($uploadImage) || !array_key_exists("filename", $uploadImage)) {
+                                            $errorMessage = $uploadImage ?? "Gagal Upload Image";
+                                            logerr($errorMessage, "Foto KTP/Passport", $user1["MBR_ID"]);
+                                            die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('There was an error uploading the file.')."'</script>");
                                         }
+                                        mysqli_query($db, '
+                                            UPDATE tb_racc SET
+                                            tb_racc.ACC_F_APP_FILE_ID = "'.$uploadImage["filename"].'"
+                                            WHERE MD5(MD5(tb_racc.ID_ACC)) = "'.$id_live.'"
+                                        ') or die (mysqli_error($db));
+                                        $s5_6_fotoid_sts = -1;
                                     } else {
                                         logerr("Type File Tidak Sesuai. Bagian Photo Data Diri", "Aplikasi Pembukaan Rekening Hal-11 (REGOL)", $user1["MBR_ID"]);
                                         die ("<script>location.href = 'home.php?page=racc/aplikasipembukaanrekening11&id=".$id_live."&notif=".base64_encode('Error: There was a problem uploading your file. Please try again.')."'</script>"); 
@@ -387,7 +322,7 @@
                 <?php if($ACC_F_APP_FILE_IMG == ''){ ?>
                     <input type="file" id="fileuploadInput1" accept=".png, .jpg, .jpeg" required name="s5_6_doc1">
                 <?php } else { ?>
-                    <img src="<?php echo 'https://'.$bucketName.'.s3.'.$region.'.amazonaws.com/'.$folder.'/'.$ACC_F_APP_FILE_IMG; ?>" width="100%">
+                    <img src="<?php echo FileUpload::aws()->awsFile($ACC_F_APP_FILE_IMG) ?>" width="100%">
                     <hr>
                     <!-- <input type="file" accept=".png, .jpg, .jpeg" name="s5_6_doc1"> -->
                 <?php }; ?>
@@ -405,7 +340,7 @@
                 <?php if($ACC_F_APP_FILE_IMG2 == ''){ ?>
                     <input type="file" id="fileuploadInput1" accept=".png, .jpg, .jpeg" name="s5_6_doc2">
                 <?php } else { ?>
-                    <img src="<?php echo 'https://'.$bucketName.'.s3.'.$region.'.amazonaws.com/'.$folder.'/'.$ACC_F_APP_FILE_IMG2; ?>" width="100%">
+                    <img src="<?php echo FileUpload::aws()->awsFile($ACC_F_APP_FILE_IMG2) ?>" width="100%">
                     <hr>
                     <!-- <input type="file" accept=".png, .jpg, .jpeg" name="s5_6_doc2"> -->
                 <?php }; ?>
@@ -423,7 +358,7 @@
                 <?php if($ACC_F_APP_FILE_FOTO == ''){ ?>
                     <input type="file" id="fileuploadInput1" accept=".png, .jpg, .jpeg" required name="s5_6_fotoself">
                 <?php } else { ?>
-                    <img src="<?php echo 'https://'.$bucketName.'.s3.'.$region.'.amazonaws.com/'.$folder.'/'.$ACC_F_APP_FILE_FOTO; ?>" width="100%">
+                    <img src="<?php echo FileUpload::aws()->awsFile($ACC_F_APP_FILE_FOTO) ?>" width="100%">
                     <hr>
                     <!-- <input type="file" accept=".png, .jpg, .jpeg" name="s5_6_fotoself"> -->
                 <?php }; ?>
@@ -441,7 +376,7 @@
                 <?php if($ACC_F_APP_FILE_ID == ''){ ?>
                     <input type="file" id="fileuploadInput1" accept=".png, .jpg, .jpeg" required name="s5_6_fotoid">
                 <?php } else { ?>
-                    <img src="<?php echo 'https://'.$bucketName.'.s3.'.$region.'.amazonaws.com/'.$folder.'/'.$ACC_F_APP_FILE_ID; ?>" width="100%">
+                    <img src="<?php echo FileUpload::aws()->awsFile($ACC_F_APP_FILE_ID) ?>" width="100%">
                     <hr>
                     <!-- <input type="file" accept=".png, .jpg, .jpeg" name="s5_6_fotoid"> -->
                 <?php }; ?>
