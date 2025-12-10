@@ -4,11 +4,11 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "1d32c16da1bf3e5d56930d9e71b7c7bb",
+    "content-hash": "194dd2394794dcc945352ba8fa66028c",
     "packages": [
         {
             "name": "allmedia/shared-module",
-            "version": "dev-testing_file_upload",
+            "version": "v1.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/DevTeam-AllMediaIndo/shared-module.git",
@@ -1789,9 +1789,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "allmedia/shared-module": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": [],
