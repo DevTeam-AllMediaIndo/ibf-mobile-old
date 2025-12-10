@@ -8,6 +8,6 @@
     "require": {
         "google/apiclient": "^2.13",
         "dompdf/dompdf": "^2.0",
-        "allmedia/shared-module": "dev-testing_file_upload"
+        "allmedia/shared-module": "^1.0"
     }
 }
