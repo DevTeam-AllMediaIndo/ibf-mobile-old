@@ -2,3 +2,4 @@
 vendor/
 phpmailer/
 test/
+composer.lock
